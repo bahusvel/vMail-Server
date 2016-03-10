@@ -1,0 +1,11 @@
+package vmail_proto;
+
+enum MessageType {
+    AUTH_REQUEST = 1;
+    AUTH_RESPONSE = 2;
+    }
+
+message VMailMessage{
+    required MessageType type = 1;
+    required bytes message_data = 2;
+}

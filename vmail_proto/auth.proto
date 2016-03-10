@@ -1,0 +1,10 @@
+package vmail_proto;
+
+message AuthRequest{
+    required string username = 1;
+    required string password = 2;
+}
+
+message AuthResponse{
+    required bool success = 1;
+}

@@ -1,14 +1,14 @@
 package main
 
 import (
-	"./proto"
+	"./vmail"
 	"time"
 )
 
 func main(){
-	var vmail = &proto.VMailServer{}
+	var vmail = &vmail.VMailServer{}
 	vmail.Init()
 	for {
-		time.Sleep(10)
+		time.Sleep(1000000)
 	}
 }
