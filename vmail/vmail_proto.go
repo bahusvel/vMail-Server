@@ -5,7 +5,6 @@ import (
 	"net"
 	"strconv"
 	"sync"
-	codec "github.com/ugorji/go/codec"
 	"time"
 	"./vmail_proto"
 	"github.com/golang/protobuf/proto"
@@ -22,52 +21,52 @@ func (this *VMailServer) connectionHander(conn net.Conn){
 	for {
 		buf := make([]byte, 1024)
 		len, err := conn.Read(buf)
-		message := vmail_proto.VMailMessage{}
-		proto.Unmarshal(buf, message)
+		message := &vmail_proto.VMailMessage{}
+		proto.Unmarshal(buf[:len], message)
 		if err != nil {
 			time.Sleep(1000)
 			continue
 		}
-		switch message.Type {
+		switch *message.Type {
 		case vmail_proto.MessageType_AUTH_REQUEST:
-			auth_request := vmail_proto.AuthRequest{}
+			auth_request := &vmail_proto.AuthRequest{}
 			proto.Unmarshal(message.MessageData, auth_request)
-			this.authenticate(auth_request, conn)
+			this.authenticate(*auth_request, conn)
 		default:
-			response := map[string]interface{}{"type": "error", "error":"unknown_message_type"}
-			enc.Encode(response)
+			response := &vmail_proto.Error{Text:proto.String("Message Unknown")}
+			sendMessage(response, conn)
 		}
 	}
 }
 
-func sendMessage(message proto.Message, conn net.Conn) error{
-	vmail_message := vmail_proto.VMailMessage{}
-	switch message.(type){
-	case vmail_proto.AuthResponse:
-		vmail_message.Type = vmail_proto.MessageType_AUTH_RESPONSE
+func sendMessage(message proto.Message, conn net.Conn){
+	vmail_message := &vmail_proto.VMailMessage{}
+	switch message.(type) {
+	case *vmail_proto.AuthResponse:
+		mtype := vmail_proto.MessageType_AUTH_RESPONSE
+		vmail_message.Type = &mtype
 	default:
-		return "Undefined type"
+		fmt.Println("Invalid message Type")
 	}
 	vmail_message.MessageData, _ = proto.Marshal(message)
 	data, _ :=proto.Marshal(vmail_message)
 	conn.Write(data)
-	return nil
 }
 
 func (this *VMailServer) authenticate(auth_request vmail_proto.AuthRequest, conn net.Conn){
 	fmt.Println("Authenticating")
-	username := auth_request.Username
-	password := auth_request.Password
-	response := vmail_proto.AuthResponse{}
+	username := *auth_request.Username
+	password := *auth_request.Password
+	response := &vmail_proto.AuthResponse{}
 	if username == "" || password == ""{
-		response.Success = false
+		response.Success = proto.Bool(false)
 		sendMessage(response, conn)
 		return
 	}
 	// TODO do proper login here
 	if username == "bahus.vel@gmail.com" && password == "password"{
 		fmt.Println("Authentication success")
-		response.Success = True
+		response.Success = proto.Bool(true)
 		sendMessage(response, conn)
 		return
 	}

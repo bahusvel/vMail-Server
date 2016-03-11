@@ -6,6 +6,10 @@ enum MessageType {
     }
 
 message VMailMessage{
-    required MessageType type = 1;
+    required MessageType mtype = 1;
     required bytes message_data = 2;
+}
+
+message Error{
+    required string text = 1;
 }
