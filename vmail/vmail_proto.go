@@ -13,7 +13,7 @@ import (
 const VMAIL_PORT = 9989
 
 type VMailServer struct {
-	connectedClients 	int
+	connectedClients 	map[string]*net.Conn
 	clientLock 			*sync.Mutex
 }
 
@@ -27,15 +27,23 @@ func (this *VMailServer) connectionHander(conn net.Conn){
 			time.Sleep(1000)
 			continue
 		}
-		switch *message.Type {
-		case vmail_proto.MessageType_AUTH_REQUEST:
-			auth_request := &vmail_proto.AuthRequest{}
-			proto.Unmarshal(message.MessageData, auth_request)
-			this.authenticate(*auth_request, conn)
-		default:
-			response := &vmail_proto.Error{Text:proto.String("Message Unknown")}
-			sendMessage(response, conn)
-		}
+		this.messageIn(message, conn)
+	}
+}
+
+func (this *VMailServer) messageIn(message *vmail_proto.VMailMessage, conn net.Conn){
+	switch *message.Mtype {
+	case vmail_proto.MessageType_AUTH_REQUEST:
+		auth_request := &vmail_proto.AuthRequest{}
+		proto.Unmarshal(message.MessageData, auth_request)
+		this.authenticate(*auth_request, conn)
+	case vmail_proto.MessageType_VMESSAGE:
+		vmessage := &vmail_proto.VMessage{}
+		proto.Unmarshal(message.MessageData, vmessage)
+		vmailIn(vmessage)
+	default:
+		response := &vmail_proto.Error{Text:proto.String("Message Unknown")}
+		sendMessage(response, conn)
 	}
 }
 
@@ -44,7 +52,7 @@ func sendMessage(message proto.Message, conn net.Conn){
 	switch message.(type) {
 	case *vmail_proto.AuthResponse:
 		mtype := vmail_proto.MessageType_AUTH_RESPONSE
-		vmail_message.Type = &mtype
+		vmail_message.Mtype = &mtype
 	default:
 		fmt.Println("Invalid message Type")
 	}
@@ -67,6 +75,9 @@ func (this *VMailServer) authenticate(auth_request vmail_proto.AuthRequest, conn
 	if username == "bahus.vel@gmail.com" && password == "password"{
 		fmt.Println("Authentication success")
 		response.Success = proto.Bool(true)
+		this.clientLock.Lock()
+		this.connectedClients[username] = &conn
+		this.clientLock.Unlock()
 		sendMessage(response, conn)
 		return
 	}
@@ -79,9 +90,6 @@ func (this *VMailServer) connectionListener(ln net.Listener){
 			fmt.Println("Connection failed to accept")
 		}
 		fmt.Printf("Clinet %s connected\n", conn.RemoteAddr())
-		this.clientLock.Lock()
-		this.connectedClients++
-		this.clientLock.Unlock()
 		go this.connectionHander(conn)
 	}
 }
@@ -89,6 +97,7 @@ func (this *VMailServer) connectionListener(ln net.Listener){
 func (this *VMailServer) Init() error {
 	fmt.Println("Initilizing the vMail Server module")
 	this.clientLock = &sync.Mutex{}
+	this.connectedClients = make(map[string]*net.Conn)
 	ln, err := net.Listen("tcp", ":" + strconv.Itoa(VMAIL_PORT))
 	if err != nil {
 		return err

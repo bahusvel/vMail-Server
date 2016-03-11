@@ -1,0 +1,11 @@
+package vmail_proto;
+
+message VMessage{
+    required string sender = 1;
+    repeated string receivers = 2;
+    repeated string hidden_receivers = 3;
+    required string subject = 4;
+    optional string transcript = 5;
+    optional bytes audio = 6;
+    repeated bytes attachments = 7;
+}

@@ -3,7 +3,8 @@ package vmail_proto;
 enum MessageType {
     AUTH_REQUEST = 1;
     AUTH_RESPONSE = 2;
-    }
+    VMESSAGE = 3;
+}
 
 message VMailMessage{
     required MessageType mtype = 1;
