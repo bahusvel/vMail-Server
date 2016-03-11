@@ -1,4 +1,4 @@
-package vmail_proto;
+package vproto;
 
 message VMessage{
     required string sender = 1;
