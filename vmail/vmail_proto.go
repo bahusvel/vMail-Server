@@ -8,6 +8,7 @@ import (
 	"time"
 	"./vmail_proto"
 	"github.com/golang/protobuf/proto"
+	"encoding/binary"
 )
 
 const VMAIL_PORT = 9989
@@ -22,14 +23,29 @@ type VMailServer struct {
 func (this *VMailServer) connectionHander(conn net.Conn){
 	for {
 		buf := make([]byte, 1024)
-		len, err := conn.Read(buf)
-		message := &vmail_proto.VMailMessage{}
-		proto.Unmarshal(buf[:len], message)
-		if err != nil {
-			time.Sleep(1000)
-			continue
+		lenbuf := make([]byte, 4)
+		var msgData []byte = make([]byte, 0)
+		lnread, err := conn.Read(lenbuf)
+		if lnread == 4 && err == nil{
+			msgLength := int(binary.LittleEndian.Uint32(lenbuf))
+			for len(msgData) < msgLength {
+				if msgLength - len(msgData) >= len(buf) {
+					lnread, err = conn.Read(buf)
+				} else {
+					buf = make([]byte, msgLength - len(msgData))
+					lnread, err = conn.Read(buf)
+				}
+				msgData = append(msgData, buf[:lnread]...)
+			}
+			message := &vmail_proto.VMailMessage{}
+			proto.Unmarshal(msgData, message)
+			if err != nil {
+				time.Sleep(1000)
+				continue
+			}
+			this.messageIn(message, conn)
 		}
-		this.messageIn(message, conn)
+
 	}
 }
 
@@ -64,6 +80,9 @@ func sendMessage(message proto.Message, conn net.Conn){
 	vmail_message.Mtype = &mtype
 	vmail_message.MessageData, _ = proto.Marshal(message)
 	data, _ :=proto.Marshal(vmail_message)
+	length := make([]byte, 4)
+	binary.LittleEndian.PutUint32(length, uint32(len(data)))
+	conn.Write(length)
 	conn.Write(data)
 }
 
