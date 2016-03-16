@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	"./vmail_proto"
+	"./vproto"
 	"github.com/golang/protobuf/proto"
 	"encoding/binary"
 )
@@ -16,7 +16,7 @@ const VMAIL_PORT = 9989
 type VMailServer struct {
 	connectedClients 	map[string]*net.Conn
 	clientLock 			*sync.Mutex
-	msgChan				chan vmail_proto.VMessage
+	msgChan				chan vproto.VMessage
 	mongo				*MongoStore
 }
 
@@ -37,7 +37,7 @@ func (this *VMailServer) connectionHander(conn net.Conn){
 				}
 				msgData = append(msgData, buf[:lnread]...)
 			}
-			message := &vmail_proto.VMailMessage{}
+			message := &vproto.VMailMessage{}
 			proto.Unmarshal(msgData, message)
 			if err != nil {
 				time.Sleep(1000)
@@ -49,30 +49,30 @@ func (this *VMailServer) connectionHander(conn net.Conn){
 	}
 }
 
-func (this *VMailServer) messageIn(message *vmail_proto.VMailMessage, conn net.Conn){
+func (this *VMailServer) messageIn(message *vproto.VMailMessage, conn net.Conn){
 	switch *message.Mtype {
-	case vmail_proto.MessageType_AUTH_REQUEST:
-		auth_request := &vmail_proto.AuthRequest{}
+	case vproto.MessageType_AUTH_REQUEST:
+		auth_request := &vproto.AuthRequest{}
 		proto.Unmarshal(message.MessageData, auth_request)
 		this.authenticate(*auth_request, conn)
-	case vmail_proto.MessageType_VMESSAGE:
-		vmessage := &vmail_proto.VMessage{}
+	case vproto.MessageType_VMESSAGE:
+		vmessage := &vproto.VMessage{}
 		proto.Unmarshal(message.MessageData, vmessage)
 		this.msgChan <- *vmessage
 	default:
-		response := &vmail_proto.Error{Text:proto.String("Message Unknown")}
+		response := &vproto.Error{Text:proto.String("Message Unknown")}
 		sendMessage(response, conn)
 	}
 }
 
 func sendMessage(message proto.Message, conn net.Conn){
-	vmail_message := &vmail_proto.VMailMessage{}
-	var mtype vmail_proto.MessageType
+	vmail_message := &vproto.VMailMessage{}
+	var mtype vproto.MessageType
 	switch message.(type) {
-	case *vmail_proto.AuthResponse:
-		mtype = vmail_proto.MessageType_AUTH_RESPONSE
-	case *vmail_proto.VMessage:
-		mtype = vmail_proto.MessageType_VMESSAGE
+	case *vproto.AuthResponse:
+		mtype = vproto.MessageType_AUTH_RESPONSE
+	case *vproto.VMessage:
+		mtype = vproto.MessageType_VMESSAGE
 	default:
 		fmt.Println("Invalid message Type")
 		return
@@ -86,11 +86,11 @@ func sendMessage(message proto.Message, conn net.Conn){
 	conn.Write(data)
 }
 
-func (this *VMailServer) authenticate(auth_request vmail_proto.AuthRequest, conn net.Conn){
+func (this *VMailServer) authenticate(auth_request vproto.AuthRequest, conn net.Conn){
 	fmt.Println("Authenticating")
 	username := *auth_request.Username
 	password := *auth_request.Password
-	response := &vmail_proto.AuthResponse{}
+	response := &vproto.AuthResponse{}
 	if username == "" || password == ""{
 		response.Success = proto.Bool(false)
 		sendMessage(response, conn)
@@ -114,11 +114,10 @@ func (this *VMailServer) authenticate(auth_request vmail_proto.AuthRequest, conn
 
 func (this *VMailServer) loginHook(username string){
 	mail := newMail(this.mongo, username)
-	fmt.Printf("The mail %v\n", mail)
 	this.deliverMail(mail)
 }
 
-func (this *VMailServer) deliverMail(messeges []vmail_proto.VMessage){
+func (this *VMailServer) deliverMail(messeges []vproto.VMessage){
 	for _, message := range messeges {
 		recipients := allRecepients(&message)
 		for _, recipient := range recipients{
@@ -140,7 +139,7 @@ func (this *VMailServer) connectionListener(ln net.Listener){
 	}
 }
 
-func (this *VMailServer) Init(msgChan chan vmail_proto.VMessage, mongo *MongoStore) error {
+func (this *VMailServer) Init(msgChan chan vproto.VMessage, mongo *MongoStore) error {
 	fmt.Println("Initilizing the vMail Server module")
 	this.msgChan = msgChan
 	this.mongo = mongo
