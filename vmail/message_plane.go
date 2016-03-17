@@ -10,6 +10,12 @@ type TransportChannels struct {
 	VServer chan vproto.VMessage
 }
 
+type MessagePlane struct {
+	Channels		TransportChannels
+	Mongo 			*MongoStore
+	StorageDomain	string
+}
+
 func getDomain(address string) string{
 	return address[strings.Index(address, "@") + 1:]
 }
@@ -22,13 +28,16 @@ func newMail(mongo *MongoStore, username string) []vproto.VMessage {
 	return mongo.msgsFromDB(bson.M{}, username+"_rx")
 }
 
-func MessagePlane(channels TransportChannels, mongo *MongoStore) {
+func (this *MessagePlane) Start(){
 	for {
 		var msg vproto.VMessage
 		select {
-		case msg = <- channels.VServer:
+		case msg = <- this.Channels.VServer:
 			fmt.Println("vServer Message")
 		}
-		mongo.toDB(msg)
+		if getDomain(msg.GetSender()) == this.StorageDomain {
+
+		}
+		this.Mongo.toDB(msg)
 	}
 }

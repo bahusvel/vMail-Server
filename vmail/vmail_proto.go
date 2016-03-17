@@ -9,6 +9,7 @@ import (
 	"./vproto"
 	"github.com/golang/protobuf/proto"
 	"encoding/binary"
+	"io"
 )
 
 const VMAIL_PORT = 9989
@@ -21,6 +22,7 @@ type VMailServer struct {
 }
 
 func (this *VMailServer) connectionHander(conn net.Conn){
+	defer conn.Close()
 	for {
 		buf := make([]byte, 1024)
 		lenbuf := make([]byte, 4)
@@ -39,14 +41,23 @@ func (this *VMailServer) connectionHander(conn net.Conn){
 			}
 			message := &vproto.VMailMessage{}
 			proto.Unmarshal(msgData, message)
-			if err != nil {
-				time.Sleep(1000)
-				continue
-			}
 			this.messageIn(message, conn)
 		}
-
+		if err == io.EOF {
+			//client disconnected
+			break
+		} else if err != nil {
+			time.Sleep(1000)
+			continue
+		}
 	}
+	this.clientLock.Lock()
+	for k, v := range this.connectedClients{
+		if *v == conn{
+			delete(this.connectedClients, k)
+		}
+	}
+	this.clientLock.Unlock()
 }
 
 func (this *VMailServer) messageIn(message *vproto.VMailMessage, conn net.Conn){
@@ -66,7 +77,6 @@ func (this *VMailServer) messageIn(message *vproto.VMailMessage, conn net.Conn){
 }
 
 func sendMessage(message proto.Message, conn net.Conn){
-	vmail_message := &vproto.VMailMessage{}
 	var mtype vproto.MessageType
 	switch message.(type) {
 	case *vproto.AuthResponse:
@@ -77,8 +87,14 @@ func sendMessage(message proto.Message, conn net.Conn){
 		fmt.Println("Invalid message Type")
 		return
 	}
+	msgData, _ := proto.Marshal(message)
+	rawSend(mtype, msgData, conn)
+}
+
+func rawSend(mtype vproto.MessageType, msgData []byte, conn net.Conn){
+	vmail_message := &vproto.VMailMessage{}
 	vmail_message.Mtype = &mtype
-	vmail_message.MessageData, _ = proto.Marshal(message)
+	vmail_message.MessageData = msgData
 	data, _ :=proto.Marshal(vmail_message)
 	length := make([]byte, 4)
 	binary.LittleEndian.PutUint32(length, uint32(len(data)))

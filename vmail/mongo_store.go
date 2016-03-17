@@ -12,10 +12,6 @@ type MongoStore struct {
 	storageDomain	string
 }
 
-type VMailMail struct {
-	vproto.VMessage
-}
-
 func (this *MongoStore) msgsFromDB(query bson.M, collection string) []vproto.VMessage{
 	var results []vproto.VMessage
 	c := this.database.C(collection)
@@ -47,4 +43,8 @@ func (this *MongoStore) Init(storageDomain string, mongoServers string){
 		panic(err)
 	}
 	this.database = this.session.DB("vmail")
+}
+
+func (this *MongoStore) Close(){
+	this.session.Close()
 }
